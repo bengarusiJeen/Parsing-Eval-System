@@ -1,0 +1,38 @@
+אני עכשיו שולח לך תיקונים שהקלודקוד שלח שכדאי לעשות בפרוייקט שלי
+אני רוצה שתסביר לי בפירוט למה צריך כל שינוי ואיך זה יעזור לי?
+
+SOLID & Modularity Review
+The system works, so I did not refactor it — these are recommendations. The models/ (domain dataclasses) vs schemas/ (API Pydantic) split is already clean. The real problems, prioritized:
+
+1. StreamService.build_stream_data — worst SRP violation (HIGH)
+One method, ~110 lines, doing six jobs: file I/O, GT block parsing, report slicing, issue extraction, highlight-spec building for 3 views, segment assembly. It is untestable as a unit. Suggested split:
+
+StreamTextLoader — reads gt/raw/pp text files
+HighlightSpecBuilder — turns diagnostic reports into (word, cls) specs
+StreamService — orchestrates the two; keeps annotate/build_segments
+2. evaluate_document returns a 6-tuple (HIGH)
+Tuple[DocumentResult, Set, Set, Set, str, str] — callers blind-unpack 6 positional values. Replace with a dataclass EvaluationArtifacts in models/. Self-documenting, and diagnostics stops depending on tuple order.
+
+3. Duplicated logic — DRY (MEDIUM)
+_is_punct_token defined identically in pipeline/main.py and pipeline/diagnostics.py
+_find_doc in comparison_engine.py duplicates ReportService.find_doc
+core/utils.py SUPPORTED_EXTENSIONS duplicates (and disagrees with) constants.SUPPORTED_EXTS — one includes .txt, one doesn't
+4. core/utils.py mixes two responsibilities (MEDIUM)
+Filesystem discovery (find_document_file, collect_files_dirs_to_test) and text normalization (clean_text, tokenize, normalize_gt_punctuation, Hebrew helpers) are unrelated. Suggested: split into core/fs_utils.py and core/text_utils.py. Also delete the dead code there: _PUNCT_TABLE (unused) and normalize_word() (no-op returning its input).
+
+5. parser_backends.py — inconsistent backend constructors (LOW)
+DefaultParserBackend.__init__ takes parser_method; PyMuPDFParserBackend takes nothing. get_backend calls cls() for registry hits but DefaultParserBackend(parser_method) for the fallback. Any future registered backend that needs parser_method would break. Normalize: every backend takes parser_method in __init__. (The registry + ABC pattern itself is good — proper Open/Closed.)
+
+6. run_diagnostics has a dead input_dir parameter (LOW)
+After my fix it writes to REPORTS_DIR and no longer uses input_dir. The parameter should be removed (and the 2 call sites in main.py updated).
+
+Proposed module division
+
+core/        text_utils.py, fs_utils.py, substitutions.py, paths.py   (no models)
+models/      document_models.py, comparison_models.py, + EvaluationArtifacts
+schemas/     requests.py                                              (API only)
+service/     evaluation, report, comparison, comparison_engine,
+             stream + new StreamTextLoader, HighlightSpecBuilder
+pipeline/    unchanged — but evaluate_document returns a dataclass
+Items 3 and 6 are low-risk and I can apply them now without changing behavior. Items 1, 2, 4 are real refactors that touch multiple files — I'd want your go-ahead before doing each. Which would you like me to take on?
+
