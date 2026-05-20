@@ -7,7 +7,7 @@ Receives a ReportService instance via constructor injection.
 from __future__ import annotations
 
 from backend.app.models.comparison_models import ComparisonResult
-from backend.app.service.comparison_engine import compare_parsers
+from backend.app.core.comparison_engine import compare_parsers
 from backend.app.service.report_service import ReportService
 
 

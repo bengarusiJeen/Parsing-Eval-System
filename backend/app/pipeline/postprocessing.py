@@ -4,40 +4,42 @@ postprocessing.py
 Postprocessing class: normalises parser output punctuation before scoring
 so it can be compared against the Ground Truth on equal terms.
 
-The rules are the mirror image of normalize_gt_punctuation() in utils.py:
+The rules are the mirror image of normalize_gt_punctuation() in text_utils.py:
 the GT is already in the ideal format; this class brings the parser output
 up to that same standard before measuring coverage and noise.
+
+Vocab is passed per-call to apply() so the class remains fully stateless.
 """
 from __future__ import annotations
 
 import re
 
+
 class Postprocessing:
-     # Hebrew Unicode ranges used across several rules.
-    _HEB = r'\u0590-\u05FF\uFB1D-\uFB4F'
-    _HEB_TOKEN = re.compile(rf'[{_HEB}]+')
+    # Hebrew Unicode ranges: U+0590-U+05FF (Hebrew block) + U+FB1D-U+FB4F (Alphabetic Presentation Forms).
+    _HEB = r'֐-׿יִﭏ'
+    _HEB_TOKEN = re.compile(rf'[֐-׿יִ-ﭏ]+')
 
+    def apply(self, text: str, vocab: set[str] | None = None) -> str:
+        """Return *text* with all punctuation normalisation rules applied.
 
-    # Hebrew Unicode ranges used across several rules.
-    _HEB = r'\u0590-\u05FF\uFB1D-\uFB4F'
-
-    def __init__(self, vocab: set[str] | None = None):
-        self._vocab = vocab or set()
-
-    def apply(self, text: str) -> str:
-        """Return *text* with all punctuation normalisation rules applied."""
+        Args:
+            vocab: GT word set for the current document; used by
+                   _rejoin_split_hebrew_words.  Pass None (or omit) when no
+                   vocab-dependent rules are needed.
+        """
         text = self._strip_asterisks(text)
         text = self._strip_ocr_button_noise(text)
 
         text = self._fix_punctuation_spacing(text)
-        text = self._fix_rtl_flipped_punct(text)   # ← NEW
+        text = self._fix_rtl_flipped_punct(text)
 
         text = self._fix_colon_spacing(text)
         text = self._fix_compound_dashes(text)
         text = self._fix_slashes(text)
         text = self._fix_mixed_language_fusions(text)
 
-        text = self._rejoin_split_hebrew_words(text)
+        text = self._rejoin_split_hebrew_words(text, vocab or set())
 
         return text
 
@@ -54,7 +56,7 @@ class Postprocessing:
     @staticmethod
     def _is_hebrew_dominant(text: str) -> bool:
         """Return True if more than half of alphabetic characters in *text* are Hebrew."""
-        heb = len(re.findall(r'[\u0590-\u05FF\uFB1D-\uFB4F]', text))
+        heb = len(re.findall(r'[֐-׿יִ-ﭏ]', text))
         lat = len(re.findall(r'[A-Za-z]', text))
         total = heb + lat
         return total > 0 and heb / total > 0.5
@@ -94,19 +96,16 @@ class Postprocessing:
         result = []
         for line in lines:
             # ── Pass 1: RTL flip repair ──────────────────────────────────
-            # Match: optional leading whitespace → ':' → whitespace → content
             m = re.match(r'^[ \t]*:[ \t]*(.+)$', line)
             if m:
                 body = m.group(1)
                 if self._is_hebrew_dominant(body):
-                    # Colon belongs at the logical end of the Hebrew phrase.
                     line = body.rstrip() + ':'
 
             # ── Pass 2: Space before colon ───────────────────────────────
-            # Lookbehind: last char before the spaces must be a letter.
             # Negative lookahead (?!/) protects URL schemes (://).
             line = re.sub(
-                rf'(?<=[A-Za-z{self._HEB}])[ \t]+:(?!/)',
+                r'(?<=[A-Za-z֐-׿יִ-ﭏ])[ \t]+:(?!/)',
                 ':',
                 line,
             )
@@ -116,8 +115,8 @@ class Postprocessing:
     def _fix_compound_dashes(self, text: str) -> str:
         """Collapse spaces around '-' for compound words (letter-letter only)."""
         return re.sub(
-            r'(?<=[A-Za-z\u0590-\u05FF\uFB1D-\uFB4F])[ \t]*-[ \t]*'
-            r'(?=[A-Za-z\u0590-\u05FF\uFB1D-\uFB4F])',
+            r'(?<=[A-Za-z֐-׿יִ-ﭏ])[ \t]*-[ \t]*'
+            r'(?=[A-Za-z֐-׿יִ-ﭏ])',
             '-',
             text,
             flags=re.MULTILINE,
@@ -141,22 +140,19 @@ class Postprocessing:
           - Hebrew → digit   e.g. ``נספח3``       → ``נספח 3``
           - digit  → Hebrew  e.g. ``123בדיקה``    → ``123 בדיקה``
         """
-        _HEBREW = r'\u0590-\u05FF'
-
         # Hebrew → Latin or digit
         text = re.sub(
-            rf'([{_HEBREW}])([A-Za-z0-9])',
+            r'([֐-׿])([A-Za-z0-9])',
             r'\1 \2',
             text,
         )
         # Latin or digit → Hebrew
         text = re.sub(
-            rf'([A-Za-z0-9])([{_HEBREW}])',
+            r'([A-Za-z0-9])([֐-׿])',
             r'\1 \2',
             text,
         )
         return text
-    
 
     def _strip_asterisks(self, text: str) -> str:
         """Remove asterisks used as bold/emphasis markers in parser output."""
@@ -182,14 +178,10 @@ class Postprocessing:
         lines = [ln if ln.strip() else '' for ln in text.split('\n')]
         return '\n'.join(lines)
 
-
-
     def _fix_rtl_flipped_punct(self, text: str) -> str:
         lines = text.split('\n')
         result = []
         for line in lines:
-            # Match: optional leading whitespace → one of ) ] . , ? → optional
-            # whitespace → content. Captured separately so we can reposition the mark.
             m = re.match(r'^[ \t]*([.,?])[ \t]*(.+?)[ \t]*$', line)
             if m:
                 mark, body = m.group(1), m.group(2)
@@ -197,9 +189,8 @@ class Postprocessing:
                     line = body + mark
             result.append(line)
         return '\n'.join(result)
-    
 
-    def _rejoin_split_hebrew_words(self, text: str) -> str:
+    def _rejoin_split_hebrew_words(self, text: str, vocab: set[str]) -> str:
         """Rejoin two adjacent Hebrew tokens when their concatenation is in
         the vocabulary and the split looks like a parser artefact.
 
@@ -212,16 +203,9 @@ class Postprocessing:
              'נציג רכש' just because 'נציגרכש' happens to share characters
              with anything in vocab.
 
-        No-op when the vocabulary is empty.
-
-        Examples (with GT vocab containing 'נציג', 'בסכום', 'החברה')
-        -----------------------------------------------------------
-            'נצ יג'        →  'נציג'        (both parts are fragments)
-            'ב סכום'       →  'בסכום'       (only 'סכום' is a real word)
-            'נציג רכש'     →  'נציג רכש'    (both parts are real words → no merge)
-            'החב רה'       →  'החברה'       (both parts are fragments)
+        No-op when vocab is empty.
         """
-        if not self._vocab:
+        if not vocab:
             return text
 
         out_lines = []
@@ -236,9 +220,9 @@ class Postprocessing:
                     if (self._HEB_TOKEN.fullmatch(cur)
                             and self._HEB_TOKEN.fullmatch(nxt)):
                         joined = cur + nxt
-                        if (joined in self._vocab
-                                and (cur not in self._vocab
-                                     or nxt not in self._vocab)):
+                        if (joined in vocab
+                                and (cur not in vocab
+                                     or nxt not in vocab)):
                             merged.append(joined)
                             i += 2
                             continue

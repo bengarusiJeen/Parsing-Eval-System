@@ -49,23 +49,22 @@ Four detectors, executed in this order — each acting as a pre-filter for the n
 
 Public API
 ----------
-    run_diagnostics(results, parser_data, input_dir)
+    run_diagnostics(results, parser_data, output_filename=...)
         parser_data is a list of
             (parser_ngrams_set, parser_words_set, parser_bigrams_set, file_ext)
-        Writes diagnostics_report.json next to input_dir.
+        Writes diagnostics_report.json to the central REPORTS_DIR.
         Returns nothing — side-effect only.
 """
 from __future__ import annotations
 
 import json
 from collections import defaultdict
-from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from backend.app.config.constants import MISSING_BLOCK_THRESHOLD
 from backend.app.core.paths import REPORTS_DIR
 from backend.app.models.document_models import BlockResult, DocumentResult
-from backend.app.core.utils import _is_hebrew, _is_latin
+from backend.app.core.text_utils import _is_hebrew, _is_latin, _is_punct_token
 
 # ── Tunable constants ────────────────────────────────────────────────────────
 DIAGNOSTICS_FILENAME       = "diagnostics_report.json"
@@ -93,10 +92,6 @@ def _is_cross_script_split(part1: str, part2: str) -> bool:
     """
     return (_word_is_hebrew(part1) and _word_is_latin(part2)) or \
            (_word_is_latin(part1)  and _word_is_hebrew(part2))
-
-def _is_punct_token(word: str) -> bool:
-    return bool(word) and all(not c.isalnum() for c in word)
-
 
 def _normalize_ngram_without_punct(ngram: str) -> str:
     return " ".join(word for word in ngram.split() if not _is_punct_token(word))
@@ -442,7 +437,7 @@ def _diagnose_document(
     parser_bigrams_set: Set[str],
     file_ext:           str,
 ) -> dict:
-    total_missing = len(result.missing_triagams)
+    total_missing = len(result.missing_trigrams)
 
     # GT words approximated from missing ngrams
     gt_words_set: Set[str] = {
@@ -455,7 +450,7 @@ def _diagnose_document(
     failed_block_indices, skipped_ngrams = _detect_missing_blocks(
         result.block_results
     )
-    remaining = [ng for ng in result.missing_triagams if ng not in skipped_ngrams]
+    remaining = [ng for ng in result.missing_trigrams if ng not in skipped_ngrams]
 
     # ── 2. OCR Split ─────────────────────────────────────────
     ocr_issues, ocr_classified = _detect_ocr_splits(
@@ -525,11 +520,11 @@ def _diagnose_document(
 def run_diagnostics(
     results:         List[DocumentResult],
     parser_data:     List[Tuple[Set[str], Set[str], Set[str], str]],
-    input_dir:       Path,
     output_filename: str = DIAGNOSTICS_FILENAME,
 ) -> None:
     """
-    Run diagnostics on all documents and write a diagnostics JSON report.
+    Run diagnostics on all documents and write a diagnostics JSON report
+    to the central REPORTS_DIR.
 
     Args:
         results          — list of DocumentResult from evaluate_document()
@@ -537,7 +532,6 @@ def run_diagnostics(
                              (parser_ngrams_set, parser_words_set,
                               parser_bigrams_set, file_ext)
                            in the same order as results
-        input_dir        — the CLI input directory; report is written next to it
         output_filename  — name of the JSON file to write (default:
                            ``diagnostics_report.json``; pass
                            ``DIAGNOSTICS_PP_FILENAME`` for the

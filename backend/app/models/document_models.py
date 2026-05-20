@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -41,7 +41,7 @@ class DocumentResult:
 
     # ── Detailed results ─────────────────────
     block_results:   List[BlockResult] = field(default_factory=list)
-    missing_triagams: List[str]        = field(default_factory=list)
+    missing_trigrams: List[str]         = field(default_factory=list)
     extra_words:      List[str]        = field(default_factory=list)
 
     # ── Convenience properties ───────────────
@@ -58,3 +58,15 @@ class DocumentResult:
             if self.noise_score.checked
             else 0.0
         )
+
+
+@dataclass
+class EvaluationArtifacts:
+    """All outputs of evaluate_document bundled under named attributes."""
+    result:              DocumentResult
+    parser_ngrams_set:   set[str]
+    parser_words_set:    set[str]
+    parser_bigrams_set:  set[str]
+    file_ext:            str
+    raw_parser_text:     str
+    postprocessed_text:  Optional[str] = None  # set when postprocessor was applied

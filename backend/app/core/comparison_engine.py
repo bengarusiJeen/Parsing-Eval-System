@@ -2,7 +2,11 @@
 comparison_engine.py
 --------------------
 Pure aggregation: reads pre-loaded report dicts, produces ComparisonResult.
-No I/O, no Flask, no side effects.
+No I/O, no FastAPI, no side effects.
+
+Lives in core/ because it is pure domain computation over report dicts —
+not an application service (no orchestration, no I/O).
+ComparisonService in service/ calls this engine after loading the reports.
 """
 from __future__ import annotations
 
@@ -12,7 +16,12 @@ from backend.app.models.comparison_models import ComparisonResult, ParserCorpusS
 
 
 def _find_doc(report: dict, doc_name: str) -> Optional[dict]:
-    """Return the document entry for doc_name from a general_report dict, or None."""
+    """Return the document entry for doc_name from a general_report dict, or None.
+
+    Intentionally local: comparison_engine.py must remain pure (no I/O, no service
+    dependencies). ReportService.find_doc() is structurally identical but lives in
+    the service layer and cannot be imported here without breaking layering.
+    """
     if not report:
         return None
     return next(
@@ -87,7 +96,7 @@ def compare_parsers(
             raw_doc = _find_doc(general,    doc_name)
             pp_doc  = _find_doc(general_pp, doc_name)
 
-            cov_chk, cov_fail, noi_chk, noi_fail          = _extract_counts(raw_doc)
+            cov_chk, cov_fail, noi_chk, noi_fail             = _extract_counts(raw_doc)
             pp_cov_chk, pp_cov_fail, pp_noi_chk, pp_noi_fail = _extract_counts(pp_doc)
 
             doc_scores.append(ParserDocumentScore(
@@ -119,7 +128,6 @@ def compare_parsers(
     for rank, corpus in enumerate(sorted_raw, start=1):
         corpus.rank_raw = rank
 
-    # Final list sorted by rank_post
     corpus_scores.sort(key=lambda c: c.rank_post)
 
     return ComparisonResult(

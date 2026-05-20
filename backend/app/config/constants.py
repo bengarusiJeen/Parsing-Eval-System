@@ -30,7 +30,7 @@ DEFAULT_PARSER_METHOD = "base_text_parser"
 # ---------------------------------------------------------------------------
 # Python module path for running the evaluation pipeline as a subprocess
 # ---------------------------------------------------------------------------
-PIPELINE_MODULE = "backend.app.pipeline.main"
+PIPELINE_MODULE = "backend.app.pipeline.cli"
 
 # ---------------------------------------------------------------------------
 # Ground-truth block delimiter (shared by gt_loader and stream_service)

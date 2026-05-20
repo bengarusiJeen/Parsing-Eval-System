@@ -26,7 +26,6 @@ class EvaluationService:
         cmd = [
             sys.executable, "-m", PIPELINE_MODULE,
             str(FILES_DIR),
-            "--verbose",
             "--output", str(GENERAL_JSON),
             "--parser", parser_method,
         ]

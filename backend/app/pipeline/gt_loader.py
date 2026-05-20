@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import List
 
 from backend.app.config.constants import GT_BLOCK_DELIMITER
-from backend.app.core.utils import clean_text, normalize_gt_punctuation, tokenize
+from backend.app.core.text_utils import clean_text, normalize_gt_punctuation, tokenize
 
 # ══════════════════════════════════════════════
 # GT loader
