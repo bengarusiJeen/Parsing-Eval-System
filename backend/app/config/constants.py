@@ -13,6 +13,16 @@ PARSER_HTTP_TIMEOUT        = 1200   # httpx timeout for calls to parser services
 PIPELINE_SUBPROCESS_TIMEOUT = 1800  # subprocess.run timeout for the evaluation pipeline
 
 # ---------------------------------------------------------------------------
+# Parser rate-limit handling
+# The Jeen /parse endpoint is rate-limited (10/min by default). A multi-parser
+# or multi-document run easily exceeds that, so calls that come back 429 are
+# retried with a wait honouring the server's Retry-After header.
+# ---------------------------------------------------------------------------
+PARSER_RATE_LIMIT_MAX_RETRIES   = 6   # how many times to retry a 429 before giving up
+PARSER_RATE_LIMIT_WAIT_SECONDS  = 10  # fallback wait when no Retry-After header is sent
+PARSER_RATE_LIMIT_MAX_WAIT_SECONDS = 65  # cap on the honoured Retry-After (a 1-min window)
+
+# ---------------------------------------------------------------------------
 # CORS origins allowed by the FastAPI app
 # ---------------------------------------------------------------------------
 CORS_ORIGINS = [

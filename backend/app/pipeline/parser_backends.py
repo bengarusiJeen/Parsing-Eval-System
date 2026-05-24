@@ -4,21 +4,41 @@ parser_backends.py
 Parser backend implementations. Each backend knows how to call one
 parser service and extract plain text from its response.
 
-To add a new parser service:
+The Jeen parser service exposes a single endpoint (PARSER_URL, port 4004).
+Every parser variant — document_intelligence, pdf_pymupdf, base_text_parser,
+auto, etc. — is selected through the ``parser_method`` query parameter and
+routed internally by the service. There is therefore one backend.
+
+To add a backend for a genuinely different service:
   1. Subclass ParserBackend and implement call().
   2. Add an entry to _REGISTRY mapping the parser_method string to the class.
 """
 from __future__ import annotations
 
+import sys
+import time
 from abc import ABC, abstractmethod
 
 import httpx
 
-from backend.app.config.constants import PARSER_HTTP_TIMEOUT as _TIMEOUT
-from backend.app.config.env import (
-    PARSER_URL as _DEFAULT_URL,
-    PYMUPDF_PARSER_URL as _PYMUPDF_URL,
+from backend.app.config.constants import (
+    PARSER_HTTP_TIMEOUT as _TIMEOUT,
+    PARSER_RATE_LIMIT_MAX_RETRIES as _MAX_RETRIES,
+    PARSER_RATE_LIMIT_MAX_WAIT_SECONDS as _MAX_WAIT,
+    PARSER_RATE_LIMIT_WAIT_SECONDS as _DEFAULT_WAIT,
 )
+from backend.app.config.env import PARSER_URL as _DEFAULT_URL
+
+
+def _retry_after_seconds(resp: httpx.Response) -> float:
+    """Seconds to wait before retrying a 429, honouring Retry-After when present."""
+    raw = resp.headers.get("Retry-After")
+    if raw:
+        try:
+            return min(float(raw), _MAX_WAIT)
+        except ValueError:
+            pass  # Retry-After can be an HTTP-date; fall back to the default wait
+    return _DEFAULT_WAIT
 
 
 class ParserBackend(ABC):
@@ -28,7 +48,11 @@ class ParserBackend(ABC):
 
 
 class DefaultParserBackend(ParserBackend):
-    """Routes to the default parser service (port 4004)."""
+    """Routes to the Jeen parser service (PARSER_URL, port 4004).
+
+    The parser variant is selected via the ``parser_method`` query param.
+    Requests that come back HTTP 429 (rate limited) are retried with a wait.
+    """
 
     def __init__(self, parser_method: str) -> None:
         self._url = (
@@ -38,42 +62,34 @@ class DefaultParserBackend(ParserBackend):
         )
 
     def call(self, file_bytes: bytes, filename: str) -> str:
-        r = httpx.post(
-            self._url,
-            content=file_bytes,
-            headers={
-                "Content-Type": "application/octet-stream",
-                "X-Original-Filename": filename,
-            },
-            timeout=_TIMEOUT,
-        )
-        r.raise_for_status()
-        return r.json().get("content", "")
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "X-Original-Filename": filename,
+        }
+
+        attempt = 0
+        while True:
+            r = httpx.post(self._url, content=file_bytes, headers=headers, timeout=_TIMEOUT)
+
+            if r.status_code == 429 and attempt < _MAX_RETRIES:
+                wait = _retry_after_seconds(r)
+                attempt += 1
+                print(
+                    f"[rate-limit] parser returned 429; waiting {wait:.0f}s then "
+                    f"retrying ({attempt}/{_MAX_RETRIES})",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
+                continue
+
+            r.raise_for_status()
+            return r.json().get("content", "")
 
 
-class PyMuPDFParserBackend(ParserBackend):
-    """Routes to the PyMuPDF service (port 8001); flattens RAG block format."""
-
-    def call(self, file_bytes: bytes, filename: str) -> str:
-        r = httpx.post(
-            f"{_PYMUPDF_URL}?method=markdown",
-            content=file_bytes,
-            headers={
-                "Content-Type": "application/octet-stream",
-                "X-Original-Filename": filename,
-            },
-            timeout=_TIMEOUT,
-        )
-        r.raise_for_status()
-        blocks = r.json().get("blocks", [])
-        return "\n".join(b.get("text", "") for b in blocks if b.get("text"))
-
-
-# Map parser_method strings to their backend classes.
-# Keys not present here fall through to DefaultParserBackend.
-_REGISTRY: dict[str, type[ParserBackend]] = {
-    "pdf_pymupdf": PyMuPDFParserBackend,
-}
+# Map parser_method strings to a dedicated backend class. Methods not listed
+# here (the normal case) fall through to DefaultParserBackend, which sends the
+# method to the Jeen service as a query param.
+_REGISTRY: dict[str, type[ParserBackend]] = {}
 
 
 def get_backend(parser_method: str) -> ParserBackend:

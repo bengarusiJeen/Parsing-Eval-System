@@ -2,16 +2,16 @@
 
 import { apiGet } from './client'
 import type {
+  EvaluateResponse,
   ResultsResponse,
-  SingleParserResult,
 } from '../types/evaluation'
 
-/** Returns the cached results, or null if none exist. */
-export async function fetchCachedResults(): Promise<SingleParserResult | null> {
+/** Returns the cached last-run result (single- or multi-parser), or null if none exist. */
+export async function fetchCachedResults(): Promise<EvaluateResponse | null> {
   try {
     const data = await apiGet<ResultsResponse>('/api/results')
-    if (data.status === 'no_results') return null
-    return data
+    if ('status' in data && data.status === 'no_results') return null
+    return data as EvaluateResponse
   } catch {
     return null
   }

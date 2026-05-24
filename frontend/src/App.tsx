@@ -13,7 +13,7 @@ function AppShell() {
   const {
     activeNav,
     setAvailableFiles,
-    loadResults,
+    applyResponse,
     switchNav,
   } = useAppState()
 
@@ -28,7 +28,9 @@ function AppShell() {
       const cached = await fetchCachedResults()
       if (cancelled) return
       if (cached) {
-        loadResults(cached)
+        // Restores single- or multi-parser data (the latter repopulates
+        // parserResults so the Compare page works after a reload).
+        applyResponse(cached)
         switchNav('results')
       }
     })()

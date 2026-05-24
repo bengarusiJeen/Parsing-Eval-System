@@ -23,3 +23,7 @@ GENERAL_JSON    = REPORTS_DIR / "general_report.json"
 DIAG_JSON       = REPORTS_DIR / "diagnostics_report.json"
 GENERAL_PP_JSON = REPORTS_DIR / "postprocessing-general_report.json"
 DIAG_PP_JSON    = REPORTS_DIR / "postprocessing-diagnostics_report.json"
+
+# Full last-run snapshot (single- or multi-parser) so the Results and Compare
+# pages can restore per-parser data after a reload without re-running parsers.
+LAST_RUN_JSON   = REPORTS_DIR / "last_run.json"

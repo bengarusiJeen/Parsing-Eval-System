@@ -54,24 +54,49 @@ class EvaluationService:
 
         reports = self._reports.load_all_reports()
 
-        return {
-            "status":     "ok" if proc.returncode == 0 else "error",
+        # A returncode of 0 alone is not success: the pipeline logs per-document
+        # parser failures (503 unavailable, 404 unsupported type, 429 rate limit,
+        # connection errors) to stderr and keeps going, so a run where *every*
+        # document failed still exits 0 — but writes no report. Treat "no general
+        # report produced" as an error so the UI surfaces the log instead of an
+        # empty, falsely-"ok" parser tab.
+        produced = reports.get("general") is not None
+        ok = proc.returncode == 0 and produced
+
+        result = {
+            "status":     "ok" if ok else "error",
             "returncode": proc.returncode,
             "stdout":     proc.stdout,
             "stderr":     proc.stderr,
             **reports,
         }
+        if not ok and not produced:
+            result["error"] = (
+                "No report was produced — every document failed to parse. "
+                "See the log for the per-document cause "
+                "(e.g. parser unavailable, unsupported file type, or rate limit)."
+            )
+        return result
 
     def run_evaluation(self, request: EvaluateRequest) -> dict:
-        """Dispatch to single- or multi-parser evaluation."""
+        """Dispatch to single- or multi-parser evaluation.
+
+        The full result is snapshotted to disk so the Results and Compare pages
+        can restore per-parser data after a reload without re-running parsers.
+        """
         parsers_list = request.parsers
         selected     = request.selected
 
         if len(parsers_list) == 1:
-            return self.run_single_parser(parsers_list[0], selected)
+            result = self.run_single_parser(parsers_list[0], selected)
+            # Tag the snapshot so /api/comparison/info can identify the parser
+            # without the frontend having to track or send it back.
+            result['_parser_id'] = parsers_list[0]
+        else:
+            parser_results: dict[str, dict] = {}
+            for parser_method in parsers_list:
+                parser_results[parser_method] = self.run_single_parser(parser_method, selected)
+            result = {"multi_parser": True, "parsers": parser_results}
 
-        parser_results: dict[str, dict] = {}
-        for parser_method in parsers_list:
-            parser_results[parser_method] = self.run_single_parser(parser_method, selected)
-
-        return {"multi_parser": True, "parsers": parser_results}
+        self._reports.save_last_run(result)
+        return result

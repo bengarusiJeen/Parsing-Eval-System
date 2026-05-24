@@ -14,6 +14,8 @@ from backend.app.core.paths import (
     DIAG_PP_JSON,
     GENERAL_JSON,
     GENERAL_PP_JSON,
+    LAST_RUN_JSON,
+    REPORTS_DIR,
 )
 
 
@@ -61,6 +63,41 @@ class ReportService:
             "general_pp":    self.load_general_pp(),
             "diagnostic_pp": self.load_diagnostic_pp(),
         }
+
+    # ── full-run snapshot ─────────────────────────────────────────────────────
+
+    def save_last_run(self, data: dict) -> None:
+        """Persist the full run result (single- or multi-parser) for later reload.
+
+        Strips bulky subprocess logs (stdout/stderr) so the snapshot stays small;
+        the report payloads themselves are what the UI needs to restore.
+        """
+        try:
+            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+            LAST_RUN_JSON.write_text(
+                json.dumps(self._strip_logs(data)), encoding="utf-8"
+            )
+        except OSError:
+            pass
+
+    def load_last_run(self) -> dict | None:
+        """Read the full last-run snapshot, or None if absent/malformed."""
+        return self.load_json(LAST_RUN_JSON)
+
+    @staticmethod
+    def _strip_logs(data: dict) -> dict:
+        """Return a copy of a run result without stdout/stderr fields."""
+        def clean(d: dict) -> dict:
+            return {k: v for k, v in d.items() if k not in ("stdout", "stderr")}
+
+        if data.get("multi_parser"):
+            return {
+                "multi_parser": True,
+                "parsers": {
+                    pid: clean(res) for pid, res in (data.get("parsers") or {}).items()
+                },
+            }
+        return clean(data)
 
     # ── document helpers ─────────────────────────────────────────────────────
 

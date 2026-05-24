@@ -1,65 +1,51 @@
-/* ComparisonPanel — top-level layout for the Compare tab: filters + raw + PP tables */
+/* ComparisonPanel — pure display layer for the Compare tab.
+ *
+ * All data comes from backend endpoints:
+ *   GET  /api/comparison/info   → available parsers + docs (filter UI)
+ *   POST /api/comparison/filter → ranked scores
+ *
+ * The panel reads only `status` from AppContext so it knows when new
+ * results are ready to fetch.  No evaluation data flows from the
+ * frontend to the backend — storage and computation stay in the backend.
+ */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { fetchComparison } from '../../api/comparisonApi'
+import { fetchComparison, fetchComparisonInfo } from '../../api/comparisonApi'
 import { useAppState } from '../../state/AppContext'
-import type { ComparisonResult, InlineParserReports } from '../../types/comparison'
+import type { ComparisonResult } from '../../types/comparison'
 import { ComparisonFilters } from './ComparisonFilters'
 import { ComparisonTable } from './ComparisonTable'
 
 export function ComparisonPanel() {
-  const {
-    selectedParsers,
-    parserResults,
-    general,
-    general_pp,
-  } = useAppState()
+  const { status } = useAppState()   // only need to know when results are ready
 
-  /* Available parsers come from the latest run: */
-  const runParsers = useMemo(() => {
-    if (Object.keys(parserResults).length > 0) return Object.keys(parserResults)
-    return [...selectedParsers]
-  }, [parserResults, selectedParsers])
+  const [runParsers,    setRunParsers]    = useState<string[]>([])
+  const [availableDocs, setAvailableDocs] = useState<string[]>([])
+  const [parserSel,     setParserSel]     = useState<Set<string>>(new Set())
+  const [docSel,        setDocSel]        = useState<Set<string>>(new Set())
+  const [result,        setResult]        = useState<ComparisonResult | null>(null)
+  const [err,           setErr]           = useState<string | null>(null)
 
-  /* Build inline reports map for the comparison endpoint */
-  const reportsMap = useMemo<InlineParserReports>(() => {
-    if (Object.keys(parserResults).length > 0) {
-      const out: InlineParserReports = {}
-      for (const [pid, d] of Object.entries(parserResults)) {
-        out[pid] = {
-          general:    d.general ?? null,
-          general_pp: d.general_pp ?? null,
-        }
-      }
-      return out
-    }
-    if (runParsers.length === 1 && general) {
-      return {
-        [runParsers[0]]: { general, general_pp: general_pp ?? null },
-      }
-    }
-    return {}
-  }, [parserResults, runParsers, general, general_pp])
+  /* Fetch available parsers + docs from the backend whenever results become ready.
+     Keeps old data visible while a new run is in progress (status === 'loading'). */
+  useEffect(() => {
+    if (status !== 'ready') return
 
-  /* Derive available docs */
-  const availableDocs = useMemo(() => {
-    const firstReport = Object.values(reportsMap)[0]
-    return (firstReport?.general?.documents ?? []).map(d => d.doc_name).filter(Boolean)
-  }, [reportsMap])
+    fetchComparisonInfo()
+      .then(info => {
+        setRunParsers(info.parsers)
+        setAvailableDocs(info.docs)
+        setParserSel(new Set(info.parsers))
+        setDocSel(new Set(info.docs))
+      })
+      .catch(() => {
+        setRunParsers([])
+        setAvailableDocs([])
+      })
+  }, [status])
 
-  /* Filter selections */
-  const [parserSel, setParserSel] = useState<Set<string>>(() => new Set(runParsers))
-  const [docSel,    setDocSel]    = useState<Set<string>>(() => new Set(availableDocs))
-
-  /* Reset selections when the underlying data changes */
-  useEffect(() => { setParserSel(new Set(runParsers)) },    [runParsers])
-  useEffect(() => { setDocSel(new Set(availableDocs)) },    [availableDocs])
-
-  /* Result + loading + error */
-  const [result, setResult] = useState<ComparisonResult | null>(null)
-  const [err,    setErr]    = useState<string | null>(null)
-
+  /* Fetch comparison scores whenever the filter selection changes. */
   useEffect(() => {
     if (parserSel.size === 0) {
       setErr('Select at least one parser.')
@@ -74,11 +60,7 @@ export function ComparisonPanel() {
 
     let cancelled = false
     setErr(null)
-    fetchComparison({
-      parsers: [...parserSel],
-      docs:    [...docSel],
-      parser_reports: Object.keys(reportsMap).length ? reportsMap : null,
-    })
+    fetchComparison({ parsers: [...parserSel], docs: [...docSel] })
       .then(res => { if (!cancelled) setResult(res) })
       .catch(e => {
         if (cancelled) return
@@ -87,7 +69,7 @@ export function ComparisonPanel() {
         setResult(null)
       })
     return () => { cancelled = true }
-  }, [parserSel, docSel, reportsMap, runParsers.length, availableDocs.length])
+  }, [parserSel, docSel, runParsers.length, availableDocs.length])
 
   const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
     (id: string) => setter(prev => {

@@ -64,3 +64,6 @@ Desktop.ini
 
 # Local assistant/tooling state
 .claude/
+
+# Personal notes / scratch files at project root
+*.txt

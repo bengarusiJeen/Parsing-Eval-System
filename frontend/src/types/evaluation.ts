@@ -32,8 +32,9 @@ export function isMultiParser(r: EvaluateResponse): r is MultiParserResponse {
   return (r as MultiParserResponse).multi_parser === true
 }
 
-/* /api/results response — backend returns the same shape as SingleParserResult
-   when results exist, or {status:'no_results'} when none do. */
+/* /api/results response — backend returns the full last-run snapshot:
+   a SingleParserResult, or a multi-parser map, or {status:'no_results'}. */
 export type ResultsResponse =
   | SingleParserResult
+  | (MultiParserResponse & { status: 'ok' })
   | { status: 'no_results' }

@@ -13,10 +13,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Parser services
+# Parser service (single Jeen endpoint; parser variant chosen via parser_method)
 # ---------------------------------------------------------------------------
-PARSER_URL: str         = os.getenv("PARSER_URL", "http://localhost:4004/api/v1/parser/parse")
-PYMUPDF_PARSER_URL: str = os.getenv("PYMUPDF_PARSER_URL", "http://localhost:8001/parse")
+PARSER_URL: str = os.getenv("PARSER_URL", "http://localhost:4004/api/v1/parser/parse")
 
 # ---------------------------------------------------------------------------
 # Azure OCR

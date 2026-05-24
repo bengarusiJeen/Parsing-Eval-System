@@ -34,6 +34,21 @@ class ComparisonService:
                 }
                 for p in parsers
             }
+
+        # No inline data: pull each parser's own reports from the last-run
+        # snapshot so multi-parser comparisons survive a reload.
+        last_run = self._reports.load_last_run()
+        if last_run and last_run.get("multi_parser"):
+            saved = last_run.get("parsers") or {}
+            return {
+                p: {
+                    "general":    (saved.get(p) or {}).get("general"),
+                    "general_pp": (saved.get(p) or {}).get("general_pp"),
+                }
+                for p in parsers
+            }
+
+        # Single-parser run (or legacy flat files): same report for each parser.
         general    = self._reports.load_general()
         general_pp = self._reports.load_general_pp()
         return {p: {"general": general, "general_pp": general_pp} for p in parsers}

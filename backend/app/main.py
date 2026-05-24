@@ -4,7 +4,10 @@ backend/app/main.py
 FastAPI application entry point for the Parsing Eval System backend.
 
 Run with:
-    uvicorn backend.app.main:app --reload --port 8000
+    uvicorn backend.app.main:app --reload --port 5000
+
+Port 5000 matches the frontend Vite dev-server proxy (/api -> :5000) and the
+CORS origins in config/constants.py. Change one and you must change all three.
 """
 from __future__ import annotations
 

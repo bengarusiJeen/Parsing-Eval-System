@@ -1,6 +1,4 @@
-/* comparison.ts — types for /api/comparison and /api/comparison/filter */
-
-import type { GeneralReport } from './reports'
+/* comparison.ts — types for /api/comparison/* */
 
 export interface ParserDocumentScore {
   parser_name: string
@@ -32,15 +30,18 @@ export interface ComparisonResult {
   scores: ParserCorpusScore[]
 }
 
-export interface InlineParserReports {
-  [parserId: string]: {
-    general:    GeneralReport | null
-    general_pp: GeneralReport | null
-  }
+/** Response from GET /api/comparison/info — drives the filter UI. */
+export interface ComparisonInfoResponse {
+  parsers: string[]
+  docs:    string[]
 }
 
+/** Request body for POST /api/comparison/filter.
+ *  parser_reports is intentionally omitted: the backend reads per-parser
+ *  data from its own storage (last_run.json).  No evaluation data should
+ *  flow from the frontend back to the backend.
+ */
 export interface ComparisonFilterRequest {
   parsers: string[]
-  docs: string[]
-  parser_reports?: InlineParserReports | null
+  docs:    string[]
 }
