@@ -25,7 +25,7 @@ import type {
 
 export type AppStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-export type NavView    = 'setup' | 'results' | 'comparison'
+export type NavView    = 'setup' | 'results' | 'comparison' | 'history' | 'corpora'
 export type ReportType = 'general' | 'postprocessing' | 'stream'
 export type SummaryTab = 'files' | 'global'
 

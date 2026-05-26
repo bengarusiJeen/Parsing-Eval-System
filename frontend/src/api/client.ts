@@ -39,3 +39,16 @@ export async function apiPost<T>(path: string, payload: unknown): Promise<T> {
   }
   return body as T
 }
+
+export async function apiPatch<T>(path: string, payload: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const body = await parseBody(res)
+  if (!res.ok) {
+    throw new ApiError(`PATCH ${path} failed (${res.status})`, res.status, body)
+  }
+  return body as T
+}

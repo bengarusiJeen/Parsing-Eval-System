@@ -7,6 +7,8 @@ import { Sidebar }             from './components/layout/Sidebar'
 import { SetupPage }           from './pages/SetupPage'
 import { ResultsPage }         from './pages/ResultsPage'
 import { ComparisonPage }      from './pages/ComparisonPage'
+import { HistoryPage }         from './pages/HistoryPage'
+import { CorporaPage }         from './pages/CorporaPage'
 import { AppProvider, useAppState } from './state/AppContext'
 
 function AppShell() {
@@ -52,6 +54,12 @@ function AppShell() {
           </div>
           <div style={{ display: activeNav === 'comparison' ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
             <ComparisonPage />
+          </div>
+          <div style={{ display: activeNav === 'history'    ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <HistoryPage />
+          </div>
+          <div style={{ display: activeNav === 'corpora'    ? 'flex' : 'none', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+            <CorporaPage />
           </div>
         </div>
       </div>
