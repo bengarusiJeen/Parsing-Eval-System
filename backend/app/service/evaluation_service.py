@@ -6,18 +6,27 @@ Receives a ReportService instance via constructor injection.
 """
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 
 from backend.app.config.constants import PIPELINE_MODULE, PIPELINE_SUBPROCESS_TIMEOUT
 from backend.app.core.paths import FILES_DIR, GENERAL_JSON, ROOT
 from backend.app.schemas.requests import EvaluateRequest
+from backend.app.service.evaluation_history_service import EvaluationHistoryService
 from backend.app.service.report_service import ReportService
+
+logger = logging.getLogger(__name__)
 
 
 class EvaluationService:
-    def __init__(self, report_service: ReportService) -> None:
+    def __init__(
+        self,
+        report_service: ReportService,
+        history_service: EvaluationHistoryService,
+    ) -> None:
         self._reports = report_service
+        self._history = history_service
 
     def run_single_parser(self, parser_method: str, selected: list[str]) -> dict:
         """Run the evaluation pipeline for one parser and return the result dict."""
@@ -99,4 +108,11 @@ class EvaluationService:
             result = {"multi_parser": True, "parsers": parser_results}
 
         self._reports.save_last_run(result)
+
+        # Best-effort DB persistence: a failure here must never break /api/evaluate.
+        try:
+            self._history.persist_evaluation(request, result)
+        except Exception:
+            logger.exception("History persistence failed; evaluation response unaffected")
+
         return result

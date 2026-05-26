@@ -11,20 +11,39 @@ CORS origins in config/constants.py. Change one and you must change all three.
 """
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.app.config.constants import CORS_ORIGINS
+from backend.app.db.init_db import init_db
 from backend.app.routes import (
     comparison_routes,
+    corpora_routes,
     evaluation_routes,
     files_routes,
+    history_routes,
     results_routes,
     stream_routes,
 )
 
-app = FastAPI(title="Parsing Eval System API", version="1.0.0")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="Parsing Eval System API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 # ── CORS (local development) ──────────────────────────────────────────────────
 app.add_middleware(
@@ -41,6 +60,8 @@ app.include_router(evaluation_routes.router)
 app.include_router(results_routes.router)
 app.include_router(stream_routes.router)
 app.include_router(comparison_routes.router)
+app.include_router(history_routes.router)
+app.include_router(corpora_routes.router)
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

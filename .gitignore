@@ -67,3 +67,6 @@ Desktop.ini
 
 # Personal notes / scratch files at project root
 *.txt
+
+# Local dev launcher (machine-specific paths)
+start-all.bat
