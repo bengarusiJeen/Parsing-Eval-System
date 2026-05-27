@@ -57,3 +57,26 @@ SUPPORTED_EXTS = {".pdf", ".docx", ".doc", ".pptx", ".xlsx"}
 # Diagnostic thresholds
 # ---------------------------------------------------------------------------
 MISSING_BLOCK_THRESHOLD = 0.10  # coverage fraction below which a block is flagged missing
+
+# ---------------------------------------------------------------------------
+# Stage 6A — parser-level concurrency
+# ---------------------------------------------------------------------------
+# How many parsers may run in parallel. Effective concurrency for any given
+# run is ``min(EVAL_PARSER_CONCURRENCY_CAP_DEFAULT, len(parser_methods))``.
+# The env var ``EVAL_PARSER_CONCURRENCY`` overrides this cap.
+#
+# Default of 3 is conservative for two reasons (per the parser-service audit):
+#   1. Jeen's /parse endpoint is rate-limited to ~10 requests/minute per IP.
+#      Above 3 parsers the burst rate quickly exceeds the bucket.
+#   2. The pdf_pymupdf leaf service (pymupdf-parser-v2) serializes requests
+#      on its own event loop, so adding more cross-parser parallelism past
+#      ~3 brings diminishing returns.
+EVAL_PARSER_CONCURRENCY_CAP_DEFAULT = 3
+
+# How many documents may be evaluated in parallel inside a single parser.
+# Stage 6A keeps this at 1 by design: each parser processes its documents
+# serially, and only different parsers run side-by-side. Stage 6B (per-parser
+# fan-out) would raise this — but only after benchmarks prove a given parser
+# can safely accept overlapping requests. Intentionally not env-configurable
+# in Stage 6A.
+EVAL_PER_PARSER_CONCURRENCY = 1

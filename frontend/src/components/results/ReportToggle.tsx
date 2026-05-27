@@ -14,7 +14,7 @@ function makeDataHref(obj: unknown): string {
 }
 
 interface Opt { id: ReportType; label: string }
-const OPTIONS: Opt[] = [
+const ALL_OPTIONS: Opt[] = [
   { id: 'general',        label: 'General Report' },
   { id: 'postprocessing', label: 'Postprocessing' },
   { id: 'stream',         label: 'Stream View' },
@@ -33,6 +33,12 @@ export function ReportToggle() {
 
   if (activeDoc === 'summary') return null
 
+  // Hide the Postprocessing tab when the run didn't include PP data — the
+  // `include_postprocessing` toggle in setup defaults off, so most runs won't
+  // have PP reports. Stream is independent of PP and stays visible.
+  const hasPP   = general_pp != null || diagnostic_pp != null
+  const options = ALL_OPTIONS.filter(o => o.id !== 'postprocessing' || hasPP)
+
   const isPP     = activeReport === 'postprocessing'
   const isStream = activeReport === 'stream'
 
@@ -46,7 +52,7 @@ export function ReportToggle() {
   return (
     <div id="toggle-bar">
       <div className="rpt-toggle">
-        {OPTIONS.map(o => (
+        {options.map(o => (
           <button
             key={o.id}
             type="button"

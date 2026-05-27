@@ -6,8 +6,14 @@ Comparison view. Receives a ReportService instance via constructor injection.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from backend.app.config.constants import GT_BLOCK_DELIMITER
-from backend.app.core.paths import FILES_DIR, PARSING_FILES_DIR
+from backend.app.core.paths import (
+    FILES_DIR,
+    PARSING_FILES_DIR,
+    per_parser_parsing_dir,
+)
 from backend.app.service.report_service import ReportService
 
 
@@ -84,14 +90,31 @@ class StreamService:
 
     # ── main entry point ─────────────────────────────────────────────────────
 
-    def build_stream_data(self, doc_name: str) -> dict:
+    def build_stream_data(self, doc_name: str, parser_method: str | None = None) -> dict:
         """
         Build the full stream comparison payload for the given document name.
         Returns a dict with keys: gt, raw, pp, has_gt, has_raw, has_pp.
+
+        When ``parser_method`` is provided (the normal case post-Stage-3),
+        raw/PP text and the four report files are read from this parser's
+        subfolder. The flat layout is used as a fallback so legacy snapshots
+        keep working.
         """
-        gt_file  = FILES_DIR         / doc_name / "GT" / "Text.txt"
-        raw_file = PARSING_FILES_DIR / f"{doc_name}.txt"
-        pp_file  = PARSING_FILES_DIR / f"{doc_name}_after_post.txt"
+        gt_file = FILES_DIR / doc_name / "GT" / "Text.txt"
+
+        # Pick the (per-parser, flat) path pair for raw text + PP text.
+        def _pick(per_parser: Path, flat: Path) -> Path:
+            return per_parser if per_parser.exists() else flat
+
+        flat_raw = PARSING_FILES_DIR / f"{doc_name}.txt"
+        flat_pp  = PARSING_FILES_DIR / f"{doc_name}_after_post.txt"
+        if parser_method:
+            parser_dir = per_parser_parsing_dir(parser_method)
+            raw_file = _pick(parser_dir / f"{doc_name}.txt",            flat_raw)
+            pp_file  = _pick(parser_dir / f"{doc_name}_after_post.txt", flat_pp)
+        else:
+            raw_file = flat_raw
+            pp_file  = flat_pp
 
         gt_text = raw_text = pp_text = None
 
@@ -107,11 +130,16 @@ class StreamService:
         if pp_file.exists():
             pp_text = pp_file.read_text(encoding="utf-8", errors="replace").strip()
 
-        # Load report slices for this document
-        diag_doc    = self._reports.find_doc(self._reports.load_diagnostic(),    doc_name)
-        diag_pp_doc = self._reports.find_doc(self._reports.load_diagnostic_pp(), doc_name)
-        gen_doc     = self._reports.find_doc(self._reports.load_general(),       doc_name)
-        gen_pp_doc  = self._reports.find_doc(self._reports.load_general_pp(),    doc_name)
+        # Load report slices for this document. Per-parser when known
+        # (so multi-parser runs hit the right diagnostics), flat otherwise.
+        if parser_method:
+            reps = self._reports.load_all_reports_for(parser_method)
+        else:
+            reps = self._reports.load_all_reports()
+        diag_doc    = self._reports.find_doc(reps.get("diagnostic"),    doc_name)
+        diag_pp_doc = self._reports.find_doc(reps.get("diagnostic_pp"), doc_name)
+        gen_doc     = self._reports.find_doc(reps.get("general"),       doc_name)
+        gen_pp_doc  = self._reports.find_doc(reps.get("general_pp"),    doc_name)
 
         def _issues(doc: dict | None) -> dict:
             dp  = (doc or {}).get("detected_problems", {})

@@ -31,12 +31,13 @@ export function StreamComparisonView() {
   const parserName  = parserLabel(parserId)
 
   return (
-    <StreamPanel docName={docName} parserName={parserName} />
+    <StreamPanel docName={docName} parserId={parserId} parserName={parserName} />
   )
 }
 
-function StreamPanel({ docName, parserName }: {
+function StreamPanel({ docName, parserId, parserName }: {
   docName:    string
+  parserId:   string
   parserName: string
 }) {
   const [data,  setData]  = useState<StreamData | null>(null)
@@ -46,12 +47,12 @@ function StreamPanel({ docName, parserName }: {
   useEffect(() => {
     let cancelled = false
     setLoad(true); setErr(null); setData(null)
-    fetchStreamData(docName)
+    fetchStreamData(docName, parserId)
       .then(d => { if (!cancelled) setData(d) })
       .catch(e => { if (!cancelled) setErr(String(e)) })
       .finally(() => { if (!cancelled) setLoad(false) })
     return () => { cancelled = true }
-  }, [docName])
+  }, [docName, parserId])
 
   if (err) {
     return (

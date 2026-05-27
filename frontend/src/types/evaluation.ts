@@ -5,6 +5,7 @@ import type { GeneralReport, DiagnosticReport } from './reports'
 export interface EvaluateRequest {
   selected: string[]
   parsers: string[]
+  include_postprocessing?: boolean
 }
 
 /* Single-parser evaluation result (also used per-parser in multi-parser runs) */

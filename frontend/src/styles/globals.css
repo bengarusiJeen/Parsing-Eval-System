@@ -1593,6 +1593,33 @@ body::before {
   color: var(--text-3);
 }
 
+/* "Run postprocessing evaluation" toggle in the setup footer */
+.pp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.pp-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+.pp-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.pp-toggle:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ── Parser selector ─────────────────────────────────────── */
 .parser-section { margin-bottom: 22px; }
 

@@ -48,6 +48,7 @@ export interface AppState {
   availableFiles: FileEntry[]
   selectedFiles: Set<string>
   selectedParsers: Set<string>
+  includePostprocessing: boolean
 
   /* results */
   general:       GeneralReport    | null
@@ -69,6 +70,7 @@ export interface AppActions {
   selectAllFiles: () => void
   clearFiles: () => void
   toggleParser: (id: string) => void
+  setIncludePostprocessing: (on: boolean) => void
 
   /* navigation */
   switchNav: (nav: NavView) => void
@@ -112,6 +114,7 @@ function initialState(): AppState {
     availableFiles:  [],
     selectedFiles:   new Set<string>(),
     selectedParsers: new Set<string>(['document_intelligence']),
+    includePostprocessing: false,
 
     general:       null,
     diagnostic:    null,
@@ -168,6 +171,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...prev, selectedParsers: next }
     })
   }, [])
+
+  const setIncludePostprocessing = useCallback((on: boolean) => {
+    patch({ includePostprocessing: on })
+  }, [patch])
 
   /* ── navigation actions ──────────────────────────────────── */
 
@@ -321,6 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectAllFiles,
     clearFiles,
     toggleParser,
+    setIncludePostprocessing,
     switchNav,
     selectDoc,
     setReport,
@@ -335,6 +343,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [
     state,
     setAvailableFiles, toggleFile, selectAllFiles, clearFiles, toggleParser,
+    setIncludePostprocessing,
     switchNav, selectDoc, setReport, setSummaryTab,
     startEvaluation, loadResults, loadMultiParserResults, switchParserTab,
     showError, setStdoutLog, applyResponse,

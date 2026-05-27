@@ -7,15 +7,23 @@ Instantiated once and injected via FastAPI Depends().
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from backend.app.core.paths import (
+    DIAG_FILENAME,
     DIAG_JSON,
+    DIAG_PP_FILENAME,
     DIAG_PP_JSON,
+    GENERAL_FILENAME,
     GENERAL_JSON,
+    GENERAL_PP_FILENAME,
     GENERAL_PP_JSON,
     LAST_RUN_JSON,
+    PP_REPORT_FILENAMES,
+    REPORT_FILENAMES,
     REPORTS_DIR,
+    per_parser_reports_dir,
 )
 
 
@@ -34,10 +42,56 @@ class ReportService:
             return None
 
     def wipe_report_files(self) -> None:
-        """Delete all known report files, ignoring missing-file errors."""
+        """Delete the flat report files, ignoring missing-file errors.
+
+        The flat report files at ``reports/general_report.json`` etc. are only
+        written for single-parser runs (backward-compat). Multi-parser runs
+        write only to per-parser subfolders, so this should be called when
+        the flat copies might be stale (e.g. before a multi-parser run).
+        """
         for p in [GENERAL_JSON, DIAG_JSON, GENERAL_PP_JSON, DIAG_PP_JSON]:
             try:
                 p.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def wipe_for(self, parser_method: str, include_pp: bool = True) -> None:
+        """Delete this parser's per-subfolder reports.
+
+        Always wipes the raw report files. When ``include_pp`` is True
+        (the default) the PP report files are wiped too — pass False if
+        the caller knows the PP files should be preserved.
+        """
+        parser_dir = per_parser_reports_dir(parser_method)
+        names = list(REPORT_FILENAMES)
+        if include_pp:
+            names += list(PP_REPORT_FILENAMES)
+        for name in names:
+            try:
+                (parser_dir / name).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def copy_per_parser_to_flat(self, parser_method: str) -> None:
+        """Copy a parser's subfolder reports out to the flat REPORTS_DIR.
+
+        Single-parser runs use this so the legacy flat filenames at
+        ``reports/general_report.json`` etc. stay populated for any external
+        consumer (e.g. the comparison service's flat-file fallback) that
+        still reads them.
+        """
+        parser_dir = per_parser_reports_dir(parser_method)
+        pairs = (
+            (parser_dir / GENERAL_FILENAME,    GENERAL_JSON),
+            (parser_dir / DIAG_FILENAME,       DIAG_JSON),
+            (parser_dir / GENERAL_PP_FILENAME, GENERAL_PP_JSON),
+            (parser_dir / DIAG_PP_FILENAME,    DIAG_PP_JSON),
+        )
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        for src, dst in pairs:
+            try:
+                if src.exists():
+                    shutil.copyfile(src, dst)
             except OSError:
                 pass
 
@@ -56,12 +110,32 @@ class ReportService:
         return self.load_json(DIAG_PP_JSON)
 
     def load_all_reports(self) -> dict:
-        """Load all four report files and return them as a single dict."""
+        """Load all four flat report files and return them as a single dict."""
         return {
             "general":       self.load_general(),
             "diagnostic":    self.load_diagnostic(),
             "general_pp":    self.load_general_pp(),
             "diagnostic_pp": self.load_diagnostic_pp(),
+        }
+
+    def load_all_reports_for(self, parser_method: str) -> dict:
+        """Load this parser's four report files from its subfolder.
+
+        Falls back to the flat path for each missing file so a legacy snapshot
+        (pre-Stage-3) or a single-parser run that hasn't been re-routed yet
+        still loads correctly.
+        """
+        parser_dir = per_parser_reports_dir(parser_method)
+
+        def _load(name: str, flat: Path) -> dict | None:
+            sub = parser_dir / name
+            return self.load_json(sub) if sub.exists() else self.load_json(flat)
+
+        return {
+            "general":       _load(GENERAL_FILENAME,    GENERAL_JSON),
+            "diagnostic":    _load(DIAG_FILENAME,       DIAG_JSON),
+            "general_pp":    _load(GENERAL_PP_FILENAME, GENERAL_PP_JSON),
+            "diagnostic_pp": _load(DIAG_PP_FILENAME,    DIAG_PP_JSON),
         }
 
     # ── full-run snapshot ─────────────────────────────────────────────────────

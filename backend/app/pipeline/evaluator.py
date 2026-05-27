@@ -24,6 +24,7 @@ from backend.app.models.document_models import (
     Score,
 )
 from backend.app.pipeline import gt_loader
+from backend.app.pipeline.cache import RunCache
 from backend.app.pipeline.metrics import compute_coverage, compute_noise, generate_ngrams
 from backend.app.pipeline.parser import parse
 from backend.app.pipeline.postprocessing import Postprocessing
@@ -42,6 +43,7 @@ def evaluate_document(
     _parser_text:  Optional[str] = None,
     sub_table:     Optional[SubstitutionTable] = None,
     parser_method: str = DEFAULT_PARSER_METHOD,
+    cache:         Optional[RunCache] = None,
 ) -> EvaluationArtifacts:
     """
     Evaluate a single document folder.
@@ -59,25 +61,36 @@ def evaluate_document(
         _parser_text   — skip re-parsing and use this string directly;
                          lets the PP pass reuse the text cached from the
                          standard pass without calling the parser twice.
+        cache          — optional per-run cache (Stage 5). When provided, GT
+                         is loaded + tokenized once per ``(file_dir, n)`` and
+                         document bytes are read once per ``file_path``,
+                         shared across parsers in the same ``run_pipeline``
+                         call. When None, the inline legacy path runs (so
+                         any direct caller still works).
     """
-    gt_dir = file_dir / "GT"
-    if not gt_dir.exists():
-        raise FileNotFoundError(f"Missing GT/ subfolder in {file_dir}")
-
     # ── Load GT ─────────────────────────────────────────────
-    gt_blocks = gt_loader.load_gt(gt_dir)
-    gt_blocks = [_maybe_strip_punctuation_tokens(block, n) for block in gt_blocks]
-    if not gt_blocks:
-        print(f"[warn] {file_dir.name}: no ==== body blocks found in GT",
-              file=sys.stderr)
+    if cache is not None:
+        gt_art           = cache.gt_artifacts(file_dir, n)
+        gt_blocks        = gt_art.gt_blocks
+        all_gt_words_set = gt_art.all_gt_words_set
+    else:
+        gt_dir = file_dir / "GT"
+        if not gt_dir.exists():
+            raise FileNotFoundError(f"Missing GT/ subfolder in {file_dir}")
 
-    all_gt_words_set = {word for block in gt_blocks for word in block}
+        gt_blocks = gt_loader.load_gt(gt_dir)
+        gt_blocks = [_maybe_strip_punctuation_tokens(block, n) for block in gt_blocks]
+        if not gt_blocks:
+            print(f"[warn] {file_dir.name}: no ==== body blocks found in GT",
+                  file=sys.stderr)
+
+        all_gt_words_set = {word for block in gt_blocks for word in block}
 
     # ── Parse document ──────────────────────────────────────
     test_file = find_document_file(file_dir)
     raw_parser_text = (
         _parser_text if _parser_text is not None
-        else parse(str(test_file), parser_method=parser_method)
+        else parse(str(test_file), parser_method=parser_method, cache=cache)
     )
 
     # Apply postprocessor when running the PP evaluation pass.

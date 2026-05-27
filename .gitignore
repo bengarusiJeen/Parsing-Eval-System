@@ -34,6 +34,7 @@ frontend/dist-ssr/
 # Application generated data
 reports/
 data/parsing_results/
+bench/
 
 # Uploaded or private document corpus
 data/files_corpus/

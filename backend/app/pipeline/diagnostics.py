@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from backend.app.config.constants import MISSING_BLOCK_THRESHOLD
@@ -521,10 +522,10 @@ def run_diagnostics(
     results:         List[DocumentResult],
     parser_data:     List[Tuple[Set[str], Set[str], Set[str], str]],
     output_filename: str = DIAGNOSTICS_FILENAME,
+    output_dir:      Path | None = None,
 ) -> None:
     """
-    Run diagnostics on all documents and write a diagnostics JSON report
-    to the central REPORTS_DIR.
+    Run diagnostics on all documents and write a diagnostics JSON report.
 
     Args:
         results          — list of DocumentResult from evaluate_document()
@@ -536,6 +537,10 @@ def run_diagnostics(
                            ``diagnostics_report.json``; pass
                            ``DIAGNOSTICS_PP_FILENAME`` for the
                            postprocessing report)
+        output_dir       — directory to write the JSON file in. Defaults to
+                           the flat ``REPORTS_DIR`` for backward compatibility;
+                           the per-parser CLI routing in Stage 3 passes the
+                           parser's subfolder here.
     """
     doc_reports: List[dict] = []
 
@@ -570,8 +575,9 @@ def run_diagnostics(
         "documents": doc_reports,
     }
 
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = REPORTS_DIR / output_filename
+    out_dir = output_dir if output_dir is not None else REPORTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / output_filename
     out_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",

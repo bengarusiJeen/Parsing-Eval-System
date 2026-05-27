@@ -28,6 +28,7 @@ from backend.app.config.constants import (
     PARSER_RATE_LIMIT_WAIT_SECONDS as _DEFAULT_WAIT,
 )
 from backend.app.config.env import PARSER_URL as _DEFAULT_URL
+from backend.app.pipeline.timing import phase
 
 
 def _retry_after_seconds(resp: httpx.Response) -> float:
@@ -69,7 +70,8 @@ class DefaultParserBackend(ParserBackend):
 
         attempt = 0
         while True:
-            r = httpx.post(self._url, content=file_bytes, headers=headers, timeout=_TIMEOUT)
+            with phase("parser_http", filename=filename, attempt=attempt):
+                r = httpx.post(self._url, content=file_bytes, headers=headers, timeout=_TIMEOUT)
 
             if r.status_code == 429 and attempt < _MAX_RETRIES:
                 wait = _retry_after_seconds(r)

@@ -14,6 +14,7 @@ class EvaluateRequest(BaseModel):
     selected: list[str] = []
     parser: str | None = None
     parsers: list[str] | None = None
+    include_postprocessing: bool = False
 
     @model_validator(mode="after")
     def resolve_parsers(self) -> "EvaluateRequest":

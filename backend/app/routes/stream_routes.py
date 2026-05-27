@@ -16,11 +16,13 @@ router = APIRouter()
 
 @router.get("/api/stream_data")
 def stream_data(
-    doc: str = Query(default=""),
-    svc: StreamService = Depends(get_stream_service),
+    doc:    str = Query(default=""),
+    parser: str = Query(default=""),
+    svc:    StreamService = Depends(get_stream_service),
 ) -> JSONResponse:
     doc_name = doc.strip()
     if not doc_name:
         return JSONResponse({"error": "Missing ?doc= parameter"}, status_code=400)
 
-    return JSONResponse(svc.build_stream_data(doc_name))
+    parser_method = parser.strip() or None
+    return JSONResponse(svc.build_stream_data(doc_name, parser_method))

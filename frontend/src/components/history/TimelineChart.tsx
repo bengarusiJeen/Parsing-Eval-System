@@ -111,10 +111,26 @@ export function TimelineChart({ series, metric, height = 240 }: Props) {
   const tMin = allTimes.length > 0 ? allTimes[0] : 0
   const tMax = allTimes.length > 0 ? allTimes[allTimes.length - 1] : 0
 
+  // TESTING-ONLY: space points uniformly by index instead of proportionally
+  // by timestamp, so back-to-back test runs don't clump together.
+  // For production (one run/day), restore the proportional version below.
+  const timeIndex = useMemo(() => {
+    const m = new Map<number, number>()
+    allTimes.forEach((t, i) => m.set(t, i))
+    return m
+  }, [allTimes])
+
   const xPos = (t: number) => {
-    if (allTimes.length <= 1 || tMax === tMin) return PAD.left + innerW / 2
-    return PAD.left + ((t - tMin) / (tMax - tMin)) * innerW
+    if (allTimes.length <= 1) return PAD.left + innerW / 2
+    const i = timeIndex.get(t) ?? 0
+    return PAD.left + (i / (allTimes.length - 1)) * innerW
   }
+
+  // Production (proportional-to-time) version — restore when runs are daily:
+  // const xPos = (t: number) => {
+  //   if (allTimes.length <= 1 || tMax === tMin) return PAD.left + innerW / 2
+  //   return PAD.left + ((t - tMin) / (tMax - tMin)) * innerW
+  // }
   const yPos = (v: number) => PAD.top + (1 - v) * innerH
 
   // Skip-every-other on the x-axis when there are more than 7 unique times.

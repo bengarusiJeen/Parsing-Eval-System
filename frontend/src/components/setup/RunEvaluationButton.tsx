@@ -9,6 +9,8 @@ export function RunEvaluationButton() {
   const {
     selectedFiles,
     selectedParsers,
+    includePostprocessing,
+    setIncludePostprocessing,
     startEvaluation,
     applyResponse,
     showError,
@@ -26,6 +28,7 @@ export function RunEvaluationButton() {
       const data = await runEvaluation({
         selected: [...selectedFiles],
         parsers:  [...selectedParsers],
+        include_postprocessing: includePostprocessing,
       })
       applyResponse(data)
     } catch {
@@ -37,6 +40,15 @@ export function RunEvaluationButton() {
 
   return (
     <div className="setup-footer">
+      <label className="pp-toggle" title="Adds a second evaluation pass that applies postprocessing to parser output. Off by default — runs faster without it.">
+        <input
+          type="checkbox"
+          checked={includePostprocessing}
+          disabled={running}
+          onChange={e => setIncludePostprocessing(e.target.checked)}
+        />
+        <span>Run postprocessing evaluation</span>
+      </label>
       <button id="run-btn" type="button" disabled={disabled} onClick={onClick}>
         {running ? (
           <>
